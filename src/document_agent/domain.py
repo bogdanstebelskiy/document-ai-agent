@@ -4,6 +4,7 @@ import os
 
 from pydantic import BaseModel
 
+
 MetadataValue = str | int | float | bool
 Metadata = dict[str, MetadataValue]
 

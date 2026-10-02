@@ -4,6 +4,7 @@ import pytest
 
 from document_agent.domain import doc_id_for, hash_text
 
+
 def test_document_id_same_for_relative_and_absolute_paths(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 

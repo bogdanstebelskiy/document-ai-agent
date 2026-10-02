@@ -4,6 +4,7 @@ from document_agent.config import settings
 
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
+
 @lru_cache(maxsize = 1)
 def get_llm() -> ChatOllama:
     return ChatOllama(

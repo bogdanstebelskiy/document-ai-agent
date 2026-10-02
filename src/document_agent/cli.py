@@ -3,6 +3,7 @@ from rich.console import Console
 
 from document_agent.models import get_llm, get_embeddings
 
+
 app = typer.Typer()
 console = Console()
 error_console = Console(stderr=True)
