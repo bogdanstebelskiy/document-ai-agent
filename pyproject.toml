@@ -19,6 +19,7 @@ dependencies = [
 [project.scripts]
 document-agent = "document_agent.cli:app"
 stats = "document_agent.cli:stats"
+ingest = "document_agent.cli:ingest"
 
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]

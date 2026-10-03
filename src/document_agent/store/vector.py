@@ -1,16 +1,22 @@
 from langchain_chroma import Chroma
 
-from document_agent.config import settings
+from document_agent.config import Settings
+from document_agent.config import settings as default_settings
 from document_agent.domain import Chunk
+from document_agent.models import get_embeddings
 
 
 class VectorStore:
-    def __init__(self, embedding_function):
+    def __init__(self, embedding_function, settings: Settings = default_settings):
         self.vector_store = Chroma(
             collection_name="document_agent",
             embedding_function=embedding_function,
             persist_directory=str(settings.data_dir / "chroma"),
         )
+
+    @staticmethod
+    def default(settings: Settings = default_settings) -> "VectorStore":
+        return VectorStore(embedding_function=get_embeddings(), settings=settings)
 
     def add(self, chunks: list[Chunk]):
         self.vector_store.add_texts(
@@ -43,7 +49,7 @@ class VectorStore:
                     doc_id=document.metadata["doc_id"],
                     index=document.metadata["index"],
                     text=document.page_content,
-                    metadata=document.metadata
+                    metadata=document.metadata,
                 ),
                 score,
             )
