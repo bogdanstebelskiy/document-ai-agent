@@ -1,12 +1,18 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from document_agent.config import Settings, settings as default_settings
+from document_agent.config import Settings
+from document_agent.config import settings as default_settings
 from document_agent.domain import Chunk, Document, chunk_id_for
-from document_agent.ingest.chunkers.base import BaseChunker
+from document_agent.ingest.chunkers.base import ContentTypeMixin
+from document_agent.ingest.formats.text import CONTENT_TYPES
 
 
-class TextChunker(BaseChunker):
-    def split(self, doc: Document, settings: Settings = default_settings) -> list[Chunk]:
+class TextChunker(ContentTypeMixin):
+    content_types = CONTENT_TYPES
+
+    def split(
+        self, doc: Document, settings: Settings = default_settings
+    ) -> list[Chunk]:
         splitter = RecursiveCharacterTextSplitter(
             separators=[
                 "\n# ",
@@ -33,8 +39,8 @@ class TextChunker(BaseChunker):
                     **doc.metadata,
                     "index": chunk_idx,
                     "doc_id": doc.doc_id,
-                    "source_uri": doc.source_uri
-                }
+                    "source_uri": doc.source_uri,
+                },
             )
             for chunk_idx, text in enumerate(texts)
         ]
