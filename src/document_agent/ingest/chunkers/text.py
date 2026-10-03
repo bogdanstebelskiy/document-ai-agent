@@ -1,12 +1,12 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from document_agent.config import Settings
+from document_agent.config import Settings, settings as default_settings
 from document_agent.domain import Chunk, Document, chunk_id_for
 from document_agent.ingest.chunkers.base import BaseChunker
 
 
 class TextChunker(BaseChunker):
-    def split(self, doc: Document, settings: Settings) -> list[Chunk]:
+    def split(self, doc: Document, settings: Settings = default_settings) -> list[Chunk]:
         splitter = RecursiveCharacterTextSplitter(
             separators=[
                 "\n# ",
