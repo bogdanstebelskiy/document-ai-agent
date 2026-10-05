@@ -11,8 +11,8 @@ class Settings(BaseSettings):
 
     data_dir: Path = PROJECT_DIR / ".data"
 
-    chunk_size: int = 1000
-    chunk_overlap: int = 150
+    chunk_size: int = 500
+    chunk_overlap: int = 50
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="DA_", extra="ignore")
 
