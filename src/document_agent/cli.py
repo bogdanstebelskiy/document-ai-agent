@@ -100,3 +100,28 @@ def retrieval_eval(k: int = typer.Option(6, help="Top-k results to retrieve per 
         for r in misses:
             miss_table.add_row(r.question, r.expected_source)
         console.print(miss_table)
+
+@app.command()
+def ask(question: str = typer.Argument(help="Question to ask your notes")) -> None:
+    from document_agent.agent.graph import build_graph
+
+    graph = build_graph()
+    citations = []
+
+    console.print()
+    for mode, chunk in graph.stream(
+        {"question": question, "messages": []},
+        stream_mode=["messages", "values"],
+    ):
+        if mode == "messages":
+            msg_chunk, _metadata = chunk
+            if msg_chunk.content:
+                print(msg_chunk.content, end="", flush=True)
+        elif mode == "values" and "citations" in chunk:
+            citations = chunk["citations"]
+
+    print("\n")
+    if citations:
+        console.print("[dim]Sources:[/dim]")
+        for source in citations:
+            console.print(f"  - {source}")
