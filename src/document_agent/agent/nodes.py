@@ -1,8 +1,14 @@
+import logging
 import re
 from pathlib import PurePath
 
+from langchain_core.exceptions import OutputParserException
+from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
+
 from document_agent.agent.prompts import GENERATION_PROMPT
-from document_agent.agent.state import AgentState
+from document_agent.agent.state import AgentState, Grade
 from document_agent.models import get_llm
 from document_agent.store.vector import VectorStore
 
@@ -13,7 +19,9 @@ def _source_label(chunk) -> str:
 
 
 def retrieve(state: AgentState) -> dict:
-    results = VectorStore.default().search(state["question"], k=5)
+    query = state["search_query"]
+    logger.info("retrieve: query=%r", query)
+    results = VectorStore.default().search(query, k=5)
     seen = set()
     chunks = []
     for chunk, _score in results:
@@ -24,6 +32,7 @@ def retrieve(state: AgentState) -> dict:
 
 
 def generate(state: AgentState) -> dict:
+    logger.info("generate: %d chunks", len(state["retrieved"]))
     chunks = state["retrieved"]
     context = "\n\n".join(
         f"[{i + 1}] ({_source_label(chunk)})\n{chunk.text}"
@@ -47,4 +56,36 @@ def generate(state: AgentState) -> dict:
     return {
         "answer": answer_text,
         "citations": citations,
+    }
+
+
+def grade(state: AgentState) -> dict:
+    logger.info("grade: %d chunks, attempts=%d", len(state["retrieved"]), state.get("attempts", 0))
+    grader = get_llm().with_structured_output(Grade)
+    relevant_chunks = []
+
+    for chunk in state["retrieved"]:
+        try:
+            result = grader.invoke(
+                f"Is this chunk relevant to the question '{state['question']}'?\n\n{chunk.text}"
+            )
+
+            if result.relevant:
+                relevant_chunks.append(chunk)
+        except (OutputParserException, ValidationError):
+            relevant_chunks.append(chunk)
+
+    return {
+        "retrieved": relevant_chunks
+    }
+
+
+def rewrite_query(state: AgentState) -> dict:
+    logger.info("rewrite_query: attempts=%d, question=%r", state.get("attempts", 0), state["question"])
+    updated_query = get_llm().invoke(f"Rephrase this question for better search: {state['question']}").content
+    updated_attempts = state.get("attempts", 0) + 1
+
+    return {
+        "attempts": updated_attempts,
+        "search_query": updated_query
     }

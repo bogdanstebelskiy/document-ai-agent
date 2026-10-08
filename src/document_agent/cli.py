@@ -110,7 +110,7 @@ def ask(question: str = typer.Argument(help="Question to ask your notes")) -> No
 
     console.print()
     for mode, chunk in graph.stream(
-        {"question": question, "messages": []},
+        {"question": question, "search_query": question, "messages": []},
         stream_mode=["messages", "values"],
     ):
         if mode == "messages":
