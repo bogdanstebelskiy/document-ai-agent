@@ -1,5 +1,5 @@
 from document_agent.domain import Document, doc_id_for, hash_text
-from document_agent.ingest.loaders.text import TextLoader
+from document_agent.ingest.loaders import TextLoader
 
 
 def test_load_returns_document_with_correct_metadata(tmp_path):

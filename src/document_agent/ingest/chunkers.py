@@ -1,16 +1,26 @@
-from typing import ClassVar
+from typing import ClassVar, Protocol, runtime_checkable
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from document_agent.config import Settings
 from document_agent.config import settings as default_settings
 from document_agent.domain import Chunk, Document, chunk_id_for
-from document_agent.ingest.chunkers.base import ContentTypeMixin
-from document_agent.ingest.formats.text import CONTENT_TYPES
+from document_agent.ingest.loaders import EXTENSION_MAP
+
+CONTENT_TYPES: frozenset[str] = frozenset(EXTENSION_MAP.values())
 
 
-class TextChunker(ContentTypeMixin):
+@runtime_checkable
+class Chunker(Protocol):
+    def supports(self, doc: Document) -> bool: ...
+    def split(self, doc: Document, settings: Settings) -> list[Chunk]: ...
+
+
+class TextChunker:
     content_types: ClassVar[frozenset[str]] = CONTENT_TYPES
+
+    def supports(self, doc: Document) -> bool:
+        return doc.content_type in self.content_types
 
     def split(
         self, doc: Document, settings: Settings = default_settings

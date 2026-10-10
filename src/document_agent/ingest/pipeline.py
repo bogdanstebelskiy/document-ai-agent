@@ -3,7 +3,9 @@ from pathlib import Path
 
 from document_agent.config import Settings
 from document_agent.config import settings as default_settings
-from document_agent.ingest.registry import ChunkerRegistry, LoaderRegistry
+from document_agent.domain import Document
+from document_agent.ingest.chunkers import Chunker, TextChunker
+from document_agent.ingest.loaders import Loader, TextLoader
 from document_agent.store.manifest import Manifest
 from document_agent.store.vector import VectorStore
 
@@ -21,16 +23,22 @@ class IngestPipeline:
     def __init__(
         self,
         settings: Settings | None = None,
-        loaders: LoaderRegistry | None = None,
-        chunkers: ChunkerRegistry | None = None,
+        loaders: list[Loader] | None = None,
+        chunkers: list[Chunker] | None = None,
         vector_store: VectorStore | None = None,
         manifest: Manifest | None = None,
     ) -> None:
         self._settings = settings or default_settings
-        self._loaders = loaders or LoaderRegistry.default()
-        self._chunkers = chunkers or ChunkerRegistry.default()
+        self._loaders = loaders or [TextLoader()]
+        self._chunkers = chunkers or [TextChunker()]
         self._vector_store = vector_store or VectorStore.default(self._settings)
         self._manifest = manifest or Manifest.default(self._settings)
+
+    def _find_loader(self, path: Path) -> Loader | None:
+        return next((loader for loader in self._loaders if loader.supports(path)), None)
+
+    def _find_chunker(self, doc: Document) -> Chunker | None:
+        return next((chunker for chunker in self._chunkers if chunker.supports(doc)), None)
 
     def ingest(self, folder: Path | str) -> IngestReport:
         report = IngestReport()
@@ -41,7 +49,7 @@ class IngestPipeline:
             if not path.is_file():
                 continue
 
-            loader = self._loaders.for_path(path)
+            loader = self._find_loader(path)
             if not loader:
                 report.unsupported += 1
                 continue
@@ -52,10 +60,10 @@ class IngestPipeline:
             existing = self._manifest.get(doc.doc_id)
 
             if existing is not None and existing.content_hash == doc.content_hash:
-                    report.skipped += 1
-                    continue
+                report.skipped += 1
+                continue
 
-            chunker = self._chunkers.for_doc(doc)
+            chunker = self._find_chunker(doc)
             if not chunker:
                 report.unsupported += 1
                 continue

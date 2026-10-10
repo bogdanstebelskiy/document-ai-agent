@@ -4,8 +4,9 @@ import pytest
 
 from document_agent.config import Settings
 from document_agent.domain import doc_id_for
+from document_agent.ingest.chunkers import TextChunker
+from document_agent.ingest.loaders import TextLoader
 from document_agent.ingest.pipeline import IngestPipeline
-from document_agent.ingest.registry import ChunkerRegistry, LoaderRegistry
 from document_agent.store.manifest import Manifest
 from document_agent.store.vector import VectorStore
 
@@ -29,8 +30,8 @@ def vector_store():
 def pipeline(tmp_path, vector_store):
     return IngestPipeline(
         settings=Settings(data_dir=tmp_path, chunk_size=500, chunk_overlap=50),
-        loaders=LoaderRegistry.default(),
-        chunkers=ChunkerRegistry.default(),
+        loaders=[TextLoader()],
+        chunkers=[TextChunker()],
         vector_store=vector_store,
         manifest=Manifest(tmp_path / "manifest"),
     )

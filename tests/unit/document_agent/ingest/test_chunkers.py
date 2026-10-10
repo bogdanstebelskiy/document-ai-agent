@@ -2,7 +2,7 @@ import itertools
 
 from document_agent.config import Settings
 from document_agent.domain import Document, hash_text
-from document_agent.ingest.chunkers.text import TextChunker
+from document_agent.ingest.chunkers import TextChunker
 
 
 def make_document(text: str) -> Document:
