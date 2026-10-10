@@ -6,12 +6,12 @@ from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import ValidationError
 
-logger = logging.getLogger(__name__)
-
 from document_agent.agent.prompts import GENERATION_PROMPT
 from document_agent.agent.state import AgentState, RouteDecision
 from document_agent.models import get_llm
 from document_agent.store.vector import VectorStore
+
+logger = logging.getLogger(__name__)
 
 
 def _source_label(chunk) -> str:
@@ -19,7 +19,7 @@ def _source_label(chunk) -> str:
     return PurePath(raw).name
 
 
-RELEVANCE_THRESHOLD = 0.85
+MAX_DISTANCE = 0.85
 
 
 def retrieve(state: AgentState) -> dict:
@@ -29,7 +29,7 @@ def retrieve(state: AgentState) -> dict:
     seen = set()
     chunks = []
     for chunk, score in results:
-        if chunk.chunk_id not in seen and score <= RELEVANCE_THRESHOLD:
+        if chunk.chunk_id not in seen and score <= MAX_DISTANCE:
             seen.add(chunk.chunk_id)
             chunks.append(chunk)
             logger.info("retrieve: kept chunk %s (score=%.3f)", chunk.chunk_id, score)

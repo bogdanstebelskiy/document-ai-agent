@@ -8,7 +8,7 @@ from document_agent.ingest.registry import LoaderRegistry
 
 class FakeLoader(ExtensionMixin):
     name = "fake"
-    extensions: ClassVar[set[str]] = {".fake"}
+    extensions: ClassVar[frozenset[str]] = frozenset({".fake"})
 
     def load(self, path: Path | str):
         pass

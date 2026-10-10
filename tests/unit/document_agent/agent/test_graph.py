@@ -4,7 +4,7 @@ from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage
 
 from document_agent.agent.graph import build_graph
-from document_agent.agent.nodes import RELEVANCE_THRESHOLD
+from document_agent.agent.nodes import MAX_DISTANCE
 from document_agent.agent.state import RouteDecision
 from document_agent.domain import Chunk
 
@@ -195,7 +195,7 @@ def test_exhausts_retries_then_generates(mock_get_llm, mock_vector_cls):
 @patch("document_agent.agent.nodes.get_llm")
 def test_score_threshold_filters_chunks(mock_get_llm, mock_vector_cls):
     chunks = _fake_chunks()
-    mock_vector_cls.default.return_value = _fake_store(chunks, score=RELEVANCE_THRESHOLD + 0.1)
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=MAX_DISTANCE + 0.1)
     mock_get_llm.return_value = _fake_llm(
         invoke_results=["rewrite 1", "rewrite 2", "Not found."],
     )
@@ -209,7 +209,7 @@ def test_score_threshold_filters_chunks(mock_get_llm, mock_vector_cls):
 @patch("document_agent.agent.nodes.get_llm")
 def test_chunks_at_threshold_are_kept(mock_get_llm, mock_vector_cls):
     chunks = _fake_chunks()
-    mock_vector_cls.default.return_value = _fake_store(chunks, score=RELEVANCE_THRESHOLD)
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=MAX_DISTANCE)
     mock_get_llm.return_value = _fake_llm(
         "Found it [1]."
     )
@@ -243,7 +243,7 @@ def test_chitchat_skips_retrieval(mock_get_llm, mock_vector_cls):
 @patch("document_agent.agent.nodes.get_llm")
 def test_knowledge_routes_to_retrieval(mock_get_llm, mock_vector_cls):
     chunks = _fake_chunks()
-    mock_vector_cls.default.return_value = _fake_store(chunks, score=RELEVANCE_THRESHOLD + 0.1)
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=MAX_DISTANCE + 0.1)
     mock_get_llm.return_value = _fake_llm(
         "Python was created by Guido van Rossum [1].",
         route_to="knowledge",

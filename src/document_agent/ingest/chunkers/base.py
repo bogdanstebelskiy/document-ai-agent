@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable
+from typing import ClassVar, Protocol, runtime_checkable
 
 from document_agent.config import Settings
 from document_agent.domain import Chunk, Document
@@ -11,9 +11,7 @@ class Chunker(Protocol):
 
 
 class ContentTypeMixin:
-    """Mixin: implements supports() by matching doc.content_type."""
-
-    content_types: set[str]
+    content_types: ClassVar[frozenset[str]]
 
     def supports(self, doc: Document) -> bool:
         return doc.content_type in self.content_types

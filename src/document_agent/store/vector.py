@@ -8,7 +8,7 @@ from document_agent.models import get_embeddings
 
 class VectorStore:
     def __init__(self, embedding_function, settings: Settings = default_settings):
-        self.vector_store = Chroma(
+        self._collection = Chroma(
             collection_name="document_agent",
             embedding_function=embedding_function,
             persist_directory=str(settings.data_dir / "chroma"),
@@ -19,7 +19,7 @@ class VectorStore:
         return VectorStore(embedding_function=get_embeddings(), settings=settings)
 
     def add(self, chunks: list[Chunk]):
-        self.vector_store.add_texts(
+        self._collection.add_texts(
             texts=[chunk.text for chunk in chunks],
             metadatas=[
                 {
@@ -32,12 +32,12 @@ class VectorStore:
         )
 
     def delete_doc(self, doc_id: str):
-        self.vector_store.delete(
+        self._collection.delete(
             where={"doc_id": doc_id},
         )
 
     def search(self, query: str, k: int = 5) -> list[tuple[Chunk, float]]:
-        results = self.vector_store.similarity_search_with_score(
+        results = self._collection.similarity_search_with_score(
             query,
             k=k,
         )
@@ -57,4 +57,4 @@ class VectorStore:
         ]
 
     def count(self) -> int:
-        return self.vector_store._collection.count()
+        return self._collection._collection.count()

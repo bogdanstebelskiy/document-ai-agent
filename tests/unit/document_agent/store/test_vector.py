@@ -93,7 +93,7 @@ def test_delete_doc_removes_only_that_documents_chunks(
 
     assert store.count() == 1
 
-    results = store.vector_store.get()
+    results = store._collection.get()
 
     assert results["ids"] == ["chores:0"]
 
@@ -123,7 +123,7 @@ def test_data_survives_store_restart(tmp_path, monkeypatch):
     assert results[0][0].chunk_id == "car:0"
 
 
-def test_readding_same_chunk_id_does_not_create_duplicate(
+def test_re_adding_same_chunk_id_does_not_create_duplicate(
     tmp_path,
     monkeypatch,
 ):
@@ -141,7 +141,7 @@ def test_readding_same_chunk_id_does_not_create_duplicate(
     assert store.count() == 1
 
 
-def test_readding_same_chunk_id_updates_existing_chunk(
+def test_re_adding_same_chunk_id_updates_existing_chunk(
     tmp_path,
     monkeypatch,
 ):
@@ -163,7 +163,7 @@ def test_readding_same_chunk_id_updates_existing_chunk(
 
     assert store.count() == 1
 
-    results = store.vector_store.get(ids=["shopping:0"])
+    results = store._collection.get(ids=["shopping:0"])
 
     assert results["ids"] == ["shopping:0"]
     assert results["documents"] == [

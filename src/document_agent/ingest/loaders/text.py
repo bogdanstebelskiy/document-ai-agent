@@ -8,7 +8,7 @@ from document_agent.ingest.loaders.base import ExtensionMixin
 
 class TextLoader(ExtensionMixin):
     name = "text"
-    extensions: ClassVar[set[str]] = set(EXTENSION_MAP)
+    extensions: ClassVar[frozenset[str]] = frozenset(EXTENSION_MAP)
 
     def load(self, path: Path | str) -> Document:
         path = Path(path)

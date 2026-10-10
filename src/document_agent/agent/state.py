@@ -18,9 +18,5 @@ class AgentState(TypedDict):
     citations: list[str]
 
 
-class Grade(BaseModel):
-    relevant: bool
-
-
 class RouteDecision(BaseModel):
     route: str

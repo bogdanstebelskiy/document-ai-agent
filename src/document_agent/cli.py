@@ -1,5 +1,6 @@
 import shutil
 import uuid
+from datetime import UTC
 
 import typer
 from rich.console import Console
@@ -105,8 +106,10 @@ def retrieval_eval(k: int = typer.Option(6, help="Top-k results to retrieve per 
 
 def _make_checkpointer():
     import sqlite3
+
     from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
     from langgraph.checkpoint.sqlite import SqliteSaver
+
     from document_agent.domain import Chunk
 
     serde = JsonPlusSerializer(allowed_msgpack_modules=[Chunk])
@@ -119,6 +122,7 @@ def ask(
     thread: str = typer.Option(None, "--thread", help="Thread ID for conversation memory"),
 ) -> None:
     from langchain_core.messages import AIMessageChunk
+
     from document_agent.agent.graph import build_graph
 
     thread_id = thread or str(uuid.uuid4())
@@ -148,7 +152,7 @@ def ask(
 
 @app.command()
 def threads() -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     saver = _make_checkpointer()
     seen = set()
@@ -167,7 +171,7 @@ def threads() -> None:
         messages = channel_values.get("messages", [])
         ts = checkpoint_tuple.checkpoint.get("ts", "")
         if ts:
-            dt = datetime.fromisoformat(ts).astimezone(timezone.utc)
+            dt = datetime.fromisoformat(ts).astimezone(UTC)
             last_active = dt.strftime("%Y-%m-%d %H:%M UTC")
         else:
             last_active = "?"

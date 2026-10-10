@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from document_agent.config import Settings
@@ -8,7 +10,7 @@ from document_agent.ingest.formats.text import CONTENT_TYPES
 
 
 class TextChunker(ContentTypeMixin):
-    content_types = CONTENT_TYPES
+    content_types: ClassVar[frozenset[str]] = CONTENT_TYPES
 
     def split(
         self, doc: Document, settings: Settings = default_settings
