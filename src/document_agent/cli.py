@@ -1,4 +1,5 @@
 import shutil
+import uuid
 
 import typer
 from rich.console import Console
@@ -101,21 +102,39 @@ def retrieval_eval(k: int = typer.Option(6, help="Top-k results to retrieve per 
             miss_table.add_row(r.question, r.expected_source)
         console.print(miss_table)
 
+
+def _make_checkpointer():
+    import sqlite3
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+    from langgraph.checkpoint.sqlite import SqliteSaver
+    from document_agent.domain import Chunk
+
+    serde = JsonPlusSerializer(allowed_msgpack_modules=[Chunk])
+    return SqliteSaver(sqlite3.connect(settings.data_dir / "checkpoints.sqlite", check_same_thread=False), serde=serde)
+
+
 @app.command()
-def ask(question: str = typer.Argument(help="Question to ask your notes")) -> None:
+def ask(
+    question: str = typer.Argument(help="Question to ask your notes"),
+    thread: str = typer.Option(None, "--thread", help="Thread ID for conversation memory"),
+) -> None:
+    from langchain_core.messages import AIMessageChunk
     from document_agent.agent.graph import build_graph
 
-    graph = build_graph()
+    thread_id = thread or str(uuid.uuid4())
+    saver = _make_checkpointer()
+    graph = build_graph(checkpointer=saver)
     citations = []
 
     console.print()
     for mode, chunk in graph.stream(
         {"question": question, "search_query": question, "messages": []},
         stream_mode=["messages", "values"],
+        config={"configurable": {"thread_id": thread_id}},
     ):
         if mode == "messages":
-            msg_chunk, _metadata = chunk
-            if msg_chunk.content:
+            msg_chunk, metadata = chunk
+            if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content and metadata.get("langgraph_node") == "generate":
                 print(msg_chunk.content, end="", flush=True)
         elif mode == "values" and "citations" in chunk:
             citations = chunk["citations"]
