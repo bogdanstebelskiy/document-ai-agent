@@ -134,7 +134,7 @@ def ask(
     ):
         if mode == "messages":
             msg_chunk, metadata = chunk
-            if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content and metadata.get("langgraph_node") == "generate":
+            if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content and metadata.get("langgraph_node") in ("generate", "respond_direct"):
                 print(msg_chunk.content, end="", flush=True)
         elif mode == "values" and "citations" in chunk:
             citations = chunk["citations"]
@@ -144,3 +144,37 @@ def ask(
         console.print("[dim]Sources:[/dim]")
         for source in citations:
             console.print(f"  - {source}")
+
+
+@app.command()
+def threads() -> None:
+    from datetime import datetime, timezone
+
+    saver = _make_checkpointer()
+    seen = set()
+    table = Table(title="Threads")
+    table.add_column("thread", style="bold")
+    table.add_column("messages", justify="right")
+    table.add_column("last active", style="dim")
+
+    for checkpoint_tuple in saver.list(None):
+        thread_id = checkpoint_tuple.config["configurable"]["thread_id"]
+        if thread_id in seen:
+            continue
+        seen.add(thread_id)
+
+        channel_values = checkpoint_tuple.checkpoint.get("channel_values", {})
+        messages = channel_values.get("messages", [])
+        ts = checkpoint_tuple.checkpoint.get("ts", "")
+        if ts:
+            dt = datetime.fromisoformat(ts).astimezone(timezone.utc)
+            last_active = dt.strftime("%Y-%m-%d %H:%M UTC")
+        else:
+            last_active = "?"
+
+        table.add_row(thread_id, str(len(messages)), last_active)
+
+    if not seen:
+        console.print("[dim]No threads found.[/dim]")
+    else:
+        console.print(table)

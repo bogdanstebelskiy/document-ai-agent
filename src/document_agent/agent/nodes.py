@@ -2,12 +2,14 @@ import logging
 import re
 from pathlib import PurePath
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
 from document_agent.agent.prompts import GENERATION_PROMPT
-from document_agent.agent.state import AgentState
+from document_agent.agent.state import AgentState, RouteDecision
 from document_agent.models import get_llm
 from document_agent.store.vector import VectorStore
 
@@ -65,6 +67,46 @@ def generate(state: AgentState) -> dict:
         ],
         "answer": answer_text,
         "citations": citations,
+    }
+
+
+def route(state: AgentState) -> dict:
+    logger.info("route: question=%r", state["question"])
+    router = get_llm().with_structured_output(RouteDecision)
+    try:
+        result = router.invoke(
+            "Classify this user message as either 'knowledge' or 'chitchat'.\n"
+            "- 'knowledge': needs information lookup (questions, requests for facts)\n"
+            "- 'chitchat': greetings, thanks, small talk, acknowledgements\n\n"
+            f"Message: {state['question']}"
+        )
+        decision = result.route if result.route in ("knowledge", "chitchat") else "knowledge"
+    except (OutputParserException, ValidationError):
+        decision = "knowledge"
+    logger.info("route: decision=%s", decision)
+    return {"route": decision}
+
+
+def respond_direct(state: AgentState) -> dict:
+    logger.info("respond_direct: question=%r", state["question"])
+    recent_messages = state.get("messages", [])[-6:]
+    if recent_messages:
+        history = "\n".join(f"{m.type}: {m.content}" for m in recent_messages)
+        prompt = (
+            f"Conversation so far:\n{history}\n\n"
+            f"User: {state['question']}\n"
+            "Respond naturally and briefly."
+        )
+    else:
+        prompt = f"User: {state['question']}\nRespond naturally and briefly."
+
+    response = get_llm().invoke(prompt).content
+    return {
+        "messages": [
+            HumanMessage(content=state["question"]),
+            AIMessage(content=response),
+        ],
+        "answer": response,
     }
 
 

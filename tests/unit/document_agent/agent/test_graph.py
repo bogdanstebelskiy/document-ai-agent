@@ -1,9 +1,11 @@
 from unittest.mock import MagicMock, patch
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage
 
 from document_agent.agent.graph import build_graph
 from document_agent.agent.nodes import RELEVANCE_THRESHOLD
+from document_agent.agent.state import RouteDecision
 from document_agent.domain import Chunk
 
 
@@ -35,12 +37,17 @@ def _fake_store(chunks, score=0.5):
     return store
 
 
-def _fake_llm(invoke_results):
+def _fake_llm(invoke_results, route_to="knowledge"):
     llm = MagicMock()
     if isinstance(invoke_results, str):
         llm.invoke.return_value = AIMessage(content=invoke_results)
     else:
         llm.invoke.side_effect = [AIMessage(content=t) for t in invoke_results]
+
+    router = MagicMock()
+    router.invoke.return_value = RouteDecision(route=route_to)
+    llm.with_structured_output.return_value = router
+
     return llm
 
 
@@ -210,3 +217,54 @@ def test_chunks_at_threshold_are_kept(mock_get_llm, mock_vector_cls):
     result = _invoke("borderline query")
 
     assert len(result["retrieved"]) == 2
+
+
+# --- Routing tests ---
+
+
+@patch("document_agent.agent.nodes.VectorStore")
+@patch("document_agent.agent.nodes.get_llm")
+def test_chitchat_skips_retrieval(mock_get_llm, mock_vector_cls):
+    mock_vector_cls.default.return_value = _fake_store([])
+    mock_get_llm.return_value = _fake_llm(
+        "You're welcome!",
+        route_to="chitchat",
+    )
+
+    result = _invoke("thanks!")
+
+    assert result["answer"] == "You're welcome!"
+    assert result["retrieved"] == []
+    assert result["citations"] == []
+    mock_vector_cls.default.return_value.search.assert_not_called()
+
+
+@patch("document_agent.agent.nodes.VectorStore")
+@patch("document_agent.agent.nodes.get_llm")
+def test_knowledge_routes_to_retrieval(mock_get_llm, mock_vector_cls):
+    chunks = _fake_chunks()
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=RELEVANCE_THRESHOLD + 0.1)
+    mock_get_llm.return_value = _fake_llm(
+        "Python was created by Guido van Rossum [1].",
+        route_to="knowledge",
+    )
+
+    result = _invoke("Who created Python?")
+
+    assert result["retrieved"] == []
+    mock_vector_cls.default.return_value.search.assert_called()
+
+
+@patch("document_agent.agent.nodes.VectorStore")
+@patch("document_agent.agent.nodes.get_llm")
+def test_route_parse_failure_defaults_to_knowledge(mock_get_llm, mock_vector_cls):
+    chunks = _fake_chunks()
+    mock_vector_cls.default.return_value = _fake_store(chunks)
+    llm = _fake_llm("Python was created by Guido van Rossum [1].")
+    llm.with_structured_output.return_value.invoke.side_effect = OutputParserException("bad output")
+    mock_get_llm.return_value = llm
+
+    result = _invoke("Who created Python?")
+
+    assert len(result["retrieved"]) == 2
+    assert "answer" in result

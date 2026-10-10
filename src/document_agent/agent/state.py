@@ -13,9 +13,14 @@ class AgentState(TypedDict):
     search_query: str
     retrieved: list[Chunk]
     attempts: int
+    route: str
     answer: str
     citations: list[str]
 
 
 class Grade(BaseModel):
     relevant: bool
+
+
+class RouteDecision(BaseModel):
+    route: str
