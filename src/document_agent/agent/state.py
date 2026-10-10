@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage
@@ -20,3 +23,16 @@ class AgentState(TypedDict):
 
 class RouteDecision(BaseModel):
     route: str
+
+
+@dataclass
+class AgentDeps:
+    llm: object
+    vector_store: object
+
+    @staticmethod
+    def default() -> AgentDeps:
+        from document_agent.models import get_llm
+        from document_agent.store.vector import VectorStore
+
+        return AgentDeps(llm=get_llm(), vector_store=VectorStore.default())

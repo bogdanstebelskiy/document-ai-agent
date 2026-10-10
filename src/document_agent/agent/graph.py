@@ -1,3 +1,5 @@
+from functools import partial
+
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
@@ -9,7 +11,7 @@ from document_agent.agent.nodes import (
     rewrite_query,
     route,
 )
-from document_agent.agent.state import AgentState
+from document_agent.agent.state import AgentDeps, AgentState
 
 
 def route_decision(state: AgentState):
@@ -24,15 +26,19 @@ def retrieve_or_generate(state: AgentState):
     return "generate"
 
 
-def build_graph(checkpointer: BaseCheckpointSaver | None = None):
+def build_graph(
+    checkpointer: BaseCheckpointSaver | None = None,
+    deps: AgentDeps | None = None,
+):
+    deps = deps or AgentDeps.default()
     builder = StateGraph(AgentState)
 
-    builder.add_node("reset_turn", reset_turn)
-    builder.add_node("route", route)
-    builder.add_node("retrieve", retrieve)
-    builder.add_node("generate", generate)
-    builder.add_node("respond_direct", respond_direct)
-    builder.add_node("rewrite_query", rewrite_query)
+    builder.add_node("reset_turn", partial(reset_turn, deps=deps))
+    builder.add_node("route", partial(route, deps=deps))
+    builder.add_node("retrieve", partial(retrieve, deps=deps))
+    builder.add_node("generate", partial(generate, deps=deps))
+    builder.add_node("respond_direct", partial(respond_direct, deps=deps))
+    builder.add_node("rewrite_query", partial(rewrite_query, deps=deps))
 
     builder.add_edge(START, "reset_turn")
     builder.add_edge("reset_turn", "route")

@@ -7,9 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import ValidationError
 
 from document_agent.agent.prompts import GENERATION_PROMPT
-from document_agent.agent.state import AgentState, RouteDecision
-from document_agent.models import get_llm
-from document_agent.store.vector import VectorStore
+from document_agent.agent.state import AgentDeps, AgentState, RouteDecision
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +20,10 @@ def _source_label(chunk) -> str:
 MAX_DISTANCE = 0.85
 
 
-def retrieve(state: AgentState) -> dict:
+def retrieve(state: AgentState, *, deps: AgentDeps) -> dict:
     query = state["search_query"]
     logger.info("retrieve: query=%r", query)
-    results = VectorStore.default().search(query, k=5)
+    results = deps.vector_store.search(query, k=5)
     seen = set()
     chunks = []
     for chunk, score in results:
@@ -38,7 +36,7 @@ def retrieve(state: AgentState) -> dict:
     return {"retrieved": chunks}
 
 
-def generate(state: AgentState) -> dict:
+def generate(state: AgentState, *, deps: AgentDeps) -> dict:
     logger.info("generate: %d chunks", len(state["retrieved"]))
     chunks = state["retrieved"]
     context = "\n\n".join(
@@ -50,7 +48,7 @@ def generate(state: AgentState) -> dict:
         context=context,
     )
 
-    response = get_llm().invoke(prompt)
+    response = deps.llm.invoke(prompt)
     answer_text = response.content
 
     cited_indices = {int(m) for m in re.findall(r"\[(\d+)\]", answer_text)}
@@ -70,9 +68,9 @@ def generate(state: AgentState) -> dict:
     }
 
 
-def route(state: AgentState) -> dict:
+def route(state: AgentState, *, deps: AgentDeps) -> dict:
     logger.info("route: question=%r", state["question"])
-    router = get_llm().with_structured_output(RouteDecision)
+    router = deps.llm.with_structured_output(RouteDecision)
     try:
         result = router.invoke(
             "Classify this user message as either 'knowledge' or 'chitchat'.\n"
@@ -87,7 +85,7 @@ def route(state: AgentState) -> dict:
     return {"route": decision}
 
 
-def respond_direct(state: AgentState) -> dict:
+def respond_direct(state: AgentState, *, deps: AgentDeps) -> dict:
     logger.info("respond_direct: question=%r", state["question"])
     recent_messages = state.get("messages", [])[-6:]
     if recent_messages:
@@ -100,7 +98,7 @@ def respond_direct(state: AgentState) -> dict:
     else:
         prompt = f"User: {state['question']}\nRespond naturally and briefly."
 
-    response = get_llm().invoke(prompt).content
+    response = deps.llm.invoke(prompt).content
     return {
         "messages": [
             HumanMessage(content=state["question"]),
@@ -110,7 +108,7 @@ def respond_direct(state: AgentState) -> dict:
     }
 
 
-def rewrite_query(state: AgentState) -> dict:
+def rewrite_query(state: AgentState, *, deps: AgentDeps) -> dict:
     logger.info("rewrite_query: attempts=%d, question=%r", state.get("attempts", 0), state["question"])
 
     recent_messages = state.get("messages", [])[-6:]
@@ -124,7 +122,7 @@ def rewrite_query(state: AgentState) -> dict:
     else:
         prompt = f"Rephrase this question for better search: {state['question']}"
 
-    updated_query = get_llm().invoke(prompt).content
+    updated_query = deps.llm.invoke(prompt).content
     updated_attempts = state.get("attempts", 0) + 1
 
     return {
@@ -133,12 +131,12 @@ def rewrite_query(state: AgentState) -> dict:
     }
 
 
-def reset_turn(state: AgentState) -> dict:
+def reset_turn(state: AgentState, *, deps: AgentDeps) -> dict:
     question = state["question"]
     recent_messages = state.get("messages", [])[-6:]
     if recent_messages:
         history = "\n".join(f"{m.type}: {m.content}" for m in recent_messages)
-        search_query = get_llm().invoke(
+        search_query = deps.llm.invoke(
             "Given this conversation history:\n"
             f"{history}\n\n"
             "The user now asks a follow-up question. Rewrite it as a "
