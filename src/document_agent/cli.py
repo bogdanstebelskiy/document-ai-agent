@@ -112,6 +112,7 @@ def _make_checkpointer():
 
     from document_agent.domain import Chunk
 
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
     serde = JsonPlusSerializer(allowed_msgpack_modules=[Chunk])
     return SqliteSaver(sqlite3.connect(settings.data_dir / "checkpoints.sqlite", check_same_thread=False), serde=serde)
 

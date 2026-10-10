@@ -51,9 +51,7 @@ class IngestPipeline:
 
             existing = self._manifest.get(doc.doc_id)
 
-            if existing is not None:
-                _, _, old_hash = existing
-                if old_hash == doc.content_hash:
+            if existing is not None and existing.content_hash == doc.content_hash:
                     report.skipped += 1
                     continue
 
@@ -74,10 +72,10 @@ class IngestPipeline:
 
             self._manifest.upsert(doc.doc_id, doc.source_uri, doc.content_hash)
 
-        for doc_id, source_uri, _ in self._manifest.all():
-            if doc_id not in seen_ids and not Path(source_uri).exists():
-                self._vector_store.delete_doc(doc_id)
-                self._manifest.delete(doc_id)
+        for record in self._manifest.all():
+            if record.doc_id not in seen_ids and not Path(record.source_uri).exists():
+                self._vector_store.delete_doc(record.doc_id)
+                self._manifest.delete(record.doc_id)
                 report.removed += 1
 
         return report

@@ -1,19 +1,28 @@
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 from document_agent.config import Settings
 from document_agent.config import settings as default_settings
 
 
+@dataclass(frozen=True, slots=True)
+class ManifestRecord:
+    doc_id: str
+    source_uri: str
+    content_hash: str
+
+
 class Manifest:
     def __init__(self, data_dir: Path):
-        self.db_path = data_dir / "document_agent.sqlite"
+        self._db_path = data_dir / "document_agent.sqlite"
 
         data_dir.mkdir(parents=True, exist_ok=True)
 
-        self.connection = sqlite3.connect(self.db_path)
+        self._connection = sqlite3.connect(self._db_path)
 
-        self.connection.execute(
+        self._connection.execute(
             """
             CREATE TABLE IF NOT EXISTS documents
             (
@@ -24,10 +33,19 @@ class Manifest:
             """
         )
 
-        self.connection.commit()
+        self._connection.commit()
 
-    def get(self, doc_id: str) -> tuple[str, str, str] | None:
-        cursor = self.connection.execute(
+    def close(self) -> None:
+        self._connection.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def get(self, doc_id: str) -> ManifestRecord | None:
+        cursor = self._connection.execute(
             """
             SELECT doc_id, source_uri, content_hash
             FROM documents
@@ -36,10 +54,13 @@ class Manifest:
             (doc_id,),
         )
 
-        return cursor.fetchone()
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return ManifestRecord(*row)
 
     def upsert(self, doc_id: str, source_uri: str, content_hash: str) -> None:
-        self.connection.execute(
+        self._connection.execute(
             """
             INSERT INTO documents (doc_id, source_uri, content_hash)
             VALUES (?, ?, ?)
@@ -50,10 +71,10 @@ class Manifest:
             (doc_id, source_uri, content_hash),
         )
 
-        self.connection.commit()
+        self._connection.commit()
 
     def delete(self, doc_id: str) -> None:
-        self.connection.execute(
+        self._connection.execute(
             """
             DELETE FROM documents
             WHERE doc_id = ?
@@ -61,17 +82,17 @@ class Manifest:
             (doc_id,),
         )
 
-        self.connection.commit()
+        self._connection.commit()
 
-    def all(self) -> list[tuple[str, str, str]]:
-        cursor = self.connection.execute(
+    def all(self) -> list[ManifestRecord]:
+        cursor = self._connection.execute(
             """
             SELECT doc_id, source_uri, content_hash
             FROM documents
             """
         )
 
-        return cursor.fetchall()
+        return [ManifestRecord(*row) for row in cursor.fetchall()]
 
     @staticmethod
     def default(settings: Settings = default_settings) -> "Manifest":
