@@ -1,10 +1,9 @@
 from unittest.mock import MagicMock, patch
 
-from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage
 
 from document_agent.agent.graph import build_graph
-from document_agent.agent.state import Grade
+from document_agent.agent.nodes import RELEVANCE_THRESHOLD
 from document_agent.domain import Chunk
 
 
@@ -27,30 +26,21 @@ def _fake_chunks():
     ]
 
 
-def _fake_store(chunks):
+def _fake_store(chunks, score=0.5):
     store = MagicMock()
-    store.search.return_value = [(c, 0.9) for c in chunks]
+    if callable(score):
+        store.search.side_effect = score
+    else:
+        store.search.return_value = [(c, score) for c in chunks]
     return store
 
 
-def _fake_llm(invoke_results, grade_results=None):
+def _fake_llm(invoke_results):
     llm = MagicMock()
     if isinstance(invoke_results, str):
         llm.invoke.return_value = AIMessage(content=invoke_results)
     else:
         llm.invoke.side_effect = [AIMessage(content=t) for t in invoke_results]
-
-    grader = MagicMock()
-    if grade_results is None:
-        grader.invoke.return_value = Grade(relevant=True)
-    elif isinstance(grade_results, Exception):
-        grader.invoke.side_effect = grade_results
-    elif isinstance(grade_results, list):
-        grader.invoke.side_effect = grade_results
-    else:
-        grader.invoke.return_value = grade_results
-    llm.with_structured_output.return_value = grader
-
     return llm
 
 
@@ -140,12 +130,11 @@ def test_graph_no_citations_when_none_referenced(mock_get_llm, mock_vector_cls):
 
 @patch("document_agent.agent.nodes.VectorStore")
 @patch("document_agent.agent.nodes.get_llm")
-def test_relevant_chunks_go_straight_to_generate(mock_get_llm, mock_vector_cls):
+def test_good_scores_go_straight_to_generate(mock_get_llm, mock_vector_cls):
     chunks = _fake_chunks()
-    mock_vector_cls.default.return_value = _fake_store(chunks)
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=0.4)
     mock_get_llm.return_value = _fake_llm(
         "Python was created by Guido van Rossum [1].",
-        grade_results=Grade(relevant=True),
     )
 
     result = _invoke("Who created Python?")
@@ -156,17 +145,20 @@ def test_relevant_chunks_go_straight_to_generate(mock_get_llm, mock_vector_cls):
 
 @patch("document_agent.agent.nodes.VectorStore")
 @patch("document_agent.agent.nodes.get_llm")
-def test_retry_on_irrelevant_then_succeed(mock_get_llm, mock_vector_cls):
+def test_bad_scores_trigger_rewrite_then_succeed(mock_get_llm, mock_vector_cls):
     chunks = _fake_chunks()
-    mock_vector_cls.default.return_value = _fake_store(chunks)
+    call_count = 0
+
+    def search_with_improving_scores(query, k=5):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return [(c, 0.95) for c in chunks]
+        return [(c, 0.4) for c in chunks]
+
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=search_with_improving_scores)
     mock_get_llm.return_value = _fake_llm(
         invoke_results=["better search query", "The answer is 42 [1]."],
-        grade_results=[
-            Grade(relevant=False),
-            Grade(relevant=False),
-            Grade(relevant=True),
-            Grade(relevant=True),
-        ],
     )
 
     result = _invoke("vague question")
@@ -180,10 +172,9 @@ def test_retry_on_irrelevant_then_succeed(mock_get_llm, mock_vector_cls):
 @patch("document_agent.agent.nodes.get_llm")
 def test_exhausts_retries_then_generates(mock_get_llm, mock_vector_cls):
     chunks = _fake_chunks()
-    mock_vector_cls.default.return_value = _fake_store(chunks)
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=0.95)
     mock_get_llm.return_value = _fake_llm(
         invoke_results=["rewrite 1", "rewrite 2", "Not found in your notes."],
-        grade_results=Grade(relevant=False),
     )
 
     result = _invoke("something completely unrelated")
@@ -195,15 +186,27 @@ def test_exhausts_retries_then_generates(mock_get_llm, mock_vector_cls):
 
 @patch("document_agent.agent.nodes.VectorStore")
 @patch("document_agent.agent.nodes.get_llm")
-def test_parse_failure_keeps_chunk_as_relevant(mock_get_llm, mock_vector_cls):
+def test_score_threshold_filters_chunks(mock_get_llm, mock_vector_cls):
     chunks = _fake_chunks()
-    mock_vector_cls.default.return_value = _fake_store(chunks)
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=RELEVANCE_THRESHOLD + 0.1)
     mock_get_llm.return_value = _fake_llm(
-        "Python was created by Guido van Rossum [1].",
-        grade_results=OutputParserException("bad output"),
+        invoke_results=["rewrite 1", "rewrite 2", "Not found."],
     )
 
-    result = _invoke("Who created Python?")
+    result = _invoke("irrelevant query")
+
+    assert result["retrieved"] == []
+
+
+@patch("document_agent.agent.nodes.VectorStore")
+@patch("document_agent.agent.nodes.get_llm")
+def test_chunks_at_threshold_are_kept(mock_get_llm, mock_vector_cls):
+    chunks = _fake_chunks()
+    mock_vector_cls.default.return_value = _fake_store(chunks, score=RELEVANCE_THRESHOLD)
+    mock_get_llm.return_value = _fake_llm(
+        "Found it [1]."
+    )
+
+    result = _invoke("borderline query")
 
     assert len(result["retrieved"]) == 2
-    assert "answer" in result

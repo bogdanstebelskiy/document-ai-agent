@@ -2,14 +2,12 @@ import logging
 import re
 from pathlib import PurePath
 
-from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage, HumanMessage
-from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
 from document_agent.agent.prompts import GENERATION_PROMPT
-from document_agent.agent.state import AgentState, Grade
+from document_agent.agent.state import AgentState
 from document_agent.models import get_llm
 from document_agent.store.vector import VectorStore
 
@@ -19,16 +17,22 @@ def _source_label(chunk) -> str:
     return PurePath(raw).name
 
 
+RELEVANCE_THRESHOLD = 0.85
+
+
 def retrieve(state: AgentState) -> dict:
     query = state["search_query"]
     logger.info("retrieve: query=%r", query)
     results = VectorStore.default().search(query, k=5)
     seen = set()
     chunks = []
-    for chunk, _score in results:
-        if chunk.chunk_id not in seen:
+    for chunk, score in results:
+        if chunk.chunk_id not in seen and score <= RELEVANCE_THRESHOLD:
             seen.add(chunk.chunk_id)
             chunks.append(chunk)
+            logger.info("retrieve: kept chunk %s (score=%.3f)", chunk.chunk_id, score)
+        elif chunk.chunk_id not in seen:
+            logger.info("retrieve: dropped chunk %s (score=%.3f)", chunk.chunk_id, score)
     return {"retrieved": chunks}
 
 
@@ -61,29 +65,6 @@ def generate(state: AgentState) -> dict:
         ],
         "answer": answer_text,
         "citations": citations,
-    }
-
-
-def grade(state: AgentState) -> dict:
-    logger.info("grade: %d chunks, attempts=%d", len(state["retrieved"]), state.get("attempts", 0))
-    grader = get_llm().with_structured_output(Grade)
-    relevant_chunks = []
-
-    for chunk in state["retrieved"]:
-        try:
-            result = grader.invoke(
-                f"Does this chunk contain ANY information that could help "
-                f"answer the question '{state['search_query']}'? "
-                f"When in doubt, mark as relevant.\n\n{chunk.text}"
-            )
-
-            if result.relevant:
-                relevant_chunks.append(chunk)
-        except (OutputParserException, ValidationError):
-            relevant_chunks.append(chunk)
-
-    return {
-        "retrieved": relevant_chunks
     }
 
 

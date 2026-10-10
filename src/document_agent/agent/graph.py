@@ -1,7 +1,7 @@
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
-from document_agent.agent.nodes import generate, grade, retrieve, rewrite_query, reset_turn
+from document_agent.agent.nodes import generate, retrieve, rewrite_query, reset_turn
 from document_agent.agent.state import AgentState
 
 
@@ -19,13 +19,11 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None):
     builder.add_node("reset_turn", reset_turn)
     builder.add_node("retrieve", retrieve)
     builder.add_node("generate", generate)
-    builder.add_node("grade", grade)
     builder.add_node("rewrite_query", rewrite_query)
 
     builder.add_edge(START, "reset_turn")
     builder.add_edge("reset_turn", "retrieve")
-    builder.add_edge("retrieve", "grade")
-    builder.add_conditional_edges("grade", route_fn)
+    builder.add_conditional_edges("retrieve", route_fn)
     builder.add_edge("rewrite_query", "retrieve")
     builder.add_edge("generate", END)
 
